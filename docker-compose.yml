@@ -22,7 +22,7 @@ services:
       KOPIA_PASSWORD: ${KOPIA_REPO_PASSWORD}
 
   influxdb-webhook-plugin:
-    build: .
+    image: abrahampm/kopia-influxdb-plugin:latest
     container_name: kopia_influxdb_plugin
     depends_on:
       - client-1
