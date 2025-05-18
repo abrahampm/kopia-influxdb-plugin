@@ -3,7 +3,7 @@ import json
 
 app = Flask(__name__)
 
-@app.route('/test', methods=['POST'])
+@app.route('/webhook', methods=['POST'])
 def webhook():
     print("\n📥 Received a POST request")
 
@@ -26,4 +26,4 @@ def webhook():
 
 if __name__ == '__main__':
     print("🚀 Starting debug webhook server on http://0.0.0.0:5000/")
-    app.run(host='0.0.0.0', port=5000)
+    app.run(host='0.0.0.0', port=5002)
