@@ -6,7 +6,7 @@ services:
     ports:
       - "51515:51515"  # Web UI
     volumes:
-      - /media:/data                            # Backup source files
+      - ./source:/data                            # Backup source files
       - client_1_cache:/app/cache               # Cache (safe to delete)
       - client_1_config:/app/config             # Encrypted config
     command: >
@@ -19,6 +19,24 @@ services:
       KOPIA_SERVER_PASSWORD: ${KOPIA_PASSWORD}
       KOPIA_SERVER_CONTROL_USERNAME: ${KOPIA_USERNAME}
       KOPIA_SERVER_CONTROL_PASSWORD: ${KOPIA_PASSWORD}
+      KOPIA_PASSWORD: ${KOPIA_REPO_PASSWORD}
+
+  influxdb-webhook-plugin:
+    build: .
+    container_name: kopia_influxdb_plugin
+    depends_on:
+      - client-1
+    environment:
+      # InfluxDB settings, set these in your environment or override here
+      INFLUX_URL: ${INFLUX_URL}
+      INFLUX_TOKEN: ${INFLUX_TOKEN}
+      INFLUX_ORG: ${INFLUX_ORG}
+      INFLUX_BUCKET: ${INFLUX_BUCKET}
+      PORT: "5000"
+    ports:
+      - "5000:5000"
+    restart: unless-stopped
+
 volumes:
   client_1_config:
   client_1_cache:
