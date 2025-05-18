@@ -1,0 +1,24 @@
+services:
+  client-1:
+    image: kopia/kopia:latest
+    container_name: kopia_client_1
+    restart: unless-stopped
+    ports:
+      - "51515:51515"  # Web UI
+    volumes:
+      - /media:/data                            # Backup source files
+      - client_1_cache:/app/cache               # Cache (safe to delete)
+      - client_1_config:/app/config             # Encrypted config
+    command: >
+      server start
+      --address=0.0.0.0:51515
+      --insecure
+    environment:
+      TZ: "America/Toronto"
+      KOPIA_SERVER_USERNAME: ${KOPIA_USERNAME}
+      KOPIA_SERVER_PASSWORD: ${KOPIA_PASSWORD}
+      KOPIA_SERVER_CONTROL_USERNAME: ${KOPIA_USERNAME}
+      KOPIA_SERVER_CONTROL_PASSWORD: ${KOPIA_PASSWORD}
+volumes:
+  client_1_config:
+  client_1_cache:
