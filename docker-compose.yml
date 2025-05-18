@@ -6,7 +6,7 @@ services:
     ports:
       - "51515:51515"  # Web UI
     volumes:
-      - ./source:/data                            # Backup source files
+      - ./source:/data                          # Backup source files
       - client_1_cache:/app/cache               # Cache (safe to delete)
       - client_1_config:/app/config             # Encrypted config
     command: >
@@ -15,10 +15,10 @@ services:
       --insecure
     environment:
       TZ: "America/Toronto"
-      KOPIA_SERVER_USERNAME: ${KOPIA_USERNAME}
-      KOPIA_SERVER_PASSWORD: ${KOPIA_PASSWORD}
-      KOPIA_SERVER_CONTROL_USERNAME: ${KOPIA_USERNAME}
-      KOPIA_SERVER_CONTROL_PASSWORD: ${KOPIA_PASSWORD}
+      KOPIA_SERVER_USERNAME: ${KOPIA_ADMIN_USERNAME}
+      KOPIA_SERVER_PASSWORD: ${KOPIA_ADMIN_PASSWORD}
+      KOPIA_SERVER_CONTROL_USERNAME: ${KOPIA_ADMIN_USERNAME}
+      KOPIA_SERVER_CONTROL_PASSWORD: ${KOPIA_ADMIN_PASSWORD}
       KOPIA_PASSWORD: ${KOPIA_REPO_PASSWORD}
 
   influxdb-webhook-plugin:
