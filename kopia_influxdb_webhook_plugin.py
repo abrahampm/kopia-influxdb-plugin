@@ -102,8 +102,8 @@ def webhook():
                 start_val = None
 
         duration_val = parse_duration(duration.group('duration')) if duration else 0.0
-        size_val = parse_size(size.group('size')) if size else 0
-        delta_val = parse_size(size.group('delta')) if (size and size.group('delta')) else 0
+        size_val = parse_size(size.group('size')) if size else 0.0
+        delta_val = parse_size(size.group('delta')) if (size and size.group('delta')) else 0.0
         files_val = int(files.group('files')) if files else 0
         files_delta = int(files.group('files_delta')) if (files and files.group('files_delta')) else 0
         dirs_val = int(dirs.group('dirs')) if dirs else 0
