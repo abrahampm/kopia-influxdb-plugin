@@ -1,11 +1,21 @@
 import os
 import re
+import logging
 from flask import Flask, request, jsonify
 from datetime import datetime
 from influxdb_client import InfluxDBClient, Point
 from influxdb_client.client.write_api import SYNCHRONOUS
 
 app = Flask(__name__)
+
+# Logging configuration
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
+logging.basicConfig(
+    level=getattr(logging, LOG_LEVEL, logging.INFO),
+    format="%(asctime)s %(levelname)s %(message)s"
+)
+logger = logging.getLogger("kopia_influxdb_webhook_plugin")
+app.logger.setLevel(getattr(logging, LOG_LEVEL, logging.INFO))
 
 # InfluxDB configuration from environment variables
 INFLUX_URL = os.getenv("INFLUX_URL")
@@ -55,6 +65,10 @@ def parse_size(val):
 def webhook():
     headers = dict(request.headers)
     raw_body = request.data.decode('utf-8', errors='replace')
+
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug(f"Headers: {headers}")
+        logger.debug(f"Raw body: {raw_body}")
 
     subject = headers.get('Subject', '')
     host = headers.get('Host', 'unknown')
@@ -130,12 +144,14 @@ def webhook():
     # Write to InfluxDB
     try:
         write_api.write(bucket=INFLUX_BUCKET, record=p)
+        logger.info("Wrote point to InfluxDB")
     except Exception as e:
-        app.logger.error(f"InfluxDB write failed: {e}")
+        logger.error(f"InfluxDB write failed: {e}")
         return jsonify({'error': 'influx write failed'}), 500
 
     return jsonify({'result': 'ok'}), 200
 
 if __name__ == '__main__':
     port = int(os.getenv('PORT', 5000))
+    logger.info(f"Starting server on port {port}")
     app.run(host='0.0.0.0', port=port)
