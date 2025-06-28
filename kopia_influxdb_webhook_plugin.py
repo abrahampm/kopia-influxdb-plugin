@@ -42,6 +42,10 @@ SIZE_RE = re.compile(r"Size:\s*(?P<size>[\d\.]+\s*[KMG]?B)(?:\s*\(\+(?P<delta>[\
 FILES_RE = re.compile(r"Files:\s*(?P<files>\d+)(?:\s*\(\+(?P<files_delta>\d+)\))?")
 DIRS_RE = re.compile(r"Directories:\s*(?P<dirs>\d+)")
 ERROR_RE = re.compile(r"Error:\s*(?P<error>.+)")
+OPERATION_RE = re.compile(r"Operation:\s*(?P<operation>.+)")
+STARTED_RE = re.compile(r"Started:\s*(?P<started>.+)")
+FINISHED_RE = re.compile(r"Finished:\s*(?P<finished>.+)")
+MAINT_DURATION_RE = re.compile(r"Finished:.*\((?P<duration>[^)]+)\)")
 DATE_FORMAT = "%a, %d %b %Y %H:%M:%S %z"
 
 # Helpers
@@ -93,6 +97,58 @@ def webhook():
         if repo:
             p.tag("repo", repo.group('repo'))
         p.field("count", 1)
+
+    elif 'maintenance' in subject.lower() or 'Operation: Scheduled Maintenance' in raw_body:
+        # Maintenance event
+        operation = OPERATION_RE.search(raw_body)
+        started = STARTED_RE.search(raw_body)
+        finished = FINISHED_RE.search(raw_body)
+        duration = MAINT_DURATION_RE.search(raw_body)
+        error = ERROR_RE.search(raw_body)
+
+        operation_val = operation.group('operation').strip() if operation else 'unknown'
+        started_val = None
+        finished_val = None
+        if started:
+            try:
+                started_val = datetime.strptime(started.group('started').strip(), DATE_FORMAT)
+            except Exception:
+                started_val = None
+        if finished:
+            try:
+                finished_val = datetime.strptime(finished.group('finished').strip(), DATE_FORMAT)
+            except Exception:
+                finished_val = None
+        duration_val = 0.0
+        if duration:
+            # Parse duration like '4h30m59s' or '300ms' or '3m28.8s'
+            dur_str = duration.group('duration').strip()
+            try:
+                # Convert to seconds
+                import isodate
+                duration_val = isodate.parse_duration('PT' + dur_str.upper().replace('H', 'H').replace('M', 'M').replace('S', 'S')).total_seconds()
+            except Exception:
+                # fallback: try to parse seconds or ms
+                if dur_str.endswith('ms'):
+                    duration_val = float(dur_str[:-2]) / 1000.0
+                elif dur_str.endswith('s'):
+                    duration_val = float(dur_str[:-1])
+                else:
+                    duration_val = 0.0
+        error_msg = error.group('error').strip() if error else ''
+
+        p = Point("kopia_maintenance")
+        p.tag("host", host)
+        p.tag("instance_name", kopia_instance)
+        p.tag("client_ip", kopia_client_ip)
+        p.tag("operation", operation_val)
+        if error_msg:
+            p.field("error", error_msg)
+        p.field("duration_seconds", duration_val)
+        if started_val:
+            p.time(started_val)
+        if finished_val:
+            p.field("finished_time", finished_val.isoformat())
 
     else:
         # Snapshot event
