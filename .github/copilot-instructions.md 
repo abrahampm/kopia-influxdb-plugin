@@ -1,0 +1,1 @@
+This is a python plugin that exposes a webhook endpoint to receive events from kopia backup clients. It then sends these events to an InfluxDB bucket for monitoring.
