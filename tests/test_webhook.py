@@ -1,10 +1,18 @@
+import os
 import pytest
 from kopia_influxdb_webhook_plugin import app
+import json
 
 
 def client():
     app.config['TESTING'] = True
     return app.test_client()
+
+# Set required env vars for import (pytest will reload module if needed)
+os.environ['INFLUX_URL'] = 'http://localhost:8086'
+os.environ['INFLUX_TOKEN'] = 'dummy-token'
+os.environ['INFLUX_ORG'] = 'dummy-org'
+os.environ['INFLUX_BUCKET'] = 'dummy-bucket'
 
 # Test data from logs.txt
 SNAPSHOT_HEADERS = {
@@ -55,15 +63,22 @@ TEST_HEADERS = {
 }
 TEST_BODY = '''Kopia Version: **0.20.1**\nBuild Info: **abcdef1**\nGithub Repo: **kopia/kopia**\n'''
 
+@pytest.fixture(autouse=True)
+def patch_write_api(monkeypatch):
+    import kopia_influxdb_webhook_plugin as plugin
+    class DummyWriteAPI:
+        def write(self, *a, **kw):
+            return None
+    plugin.write_api = DummyWriteAPI()
+    yield
+
 @pytest.mark.parametrize("headers, body, expected_code", [
     (SNAPSHOT_HEADERS, SNAPSHOT_BODY, 200),
     (MAINTENANCE_HEADERS, MAINTENANCE_BODY, 200),
     (TEST_HEADERS, TEST_BODY, 200),
 ])
-def test_webhook_all_types(headers, body, expected_code, monkeypatch):
+def test_webhook_all_types(headers, body, expected_code):
     c = client()
-    # Patch influx write to avoid real DB call
-    monkeypatch.setattr('kopia_influxdb_webhook_plugin.write_api.write', lambda *a, **kw: None)
     resp = c.post('/webhook', data=body, headers=headers)
     assert resp.status_code == expected_code
     assert resp.json['result'] == 'ok'
@@ -71,9 +86,12 @@ def test_webhook_all_types(headers, body, expected_code, monkeypatch):
 # Additional: test error handling
 
 def test_webhook_influxdb_error(monkeypatch):
+    import kopia_influxdb_webhook_plugin as plugin
+    class FailingWriteAPI:
+        def write(self, *a, **kw):
+            raise Exception('fail')
+    plugin.write_api = FailingWriteAPI()
     c = client()
-    monkeypatch.setattr('kopia_influxdb_webhook_plugin.write_api.write', lambda *a, **kw: (_ for _ in ()).throw(Exception('fail')))
     resp = c.post('/webhook', data=SNAPSHOT_BODY, headers=SNAPSHOT_HEADERS)
     assert resp.status_code == 500
     assert 'error' in resp.json
-

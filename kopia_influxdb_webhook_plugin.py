@@ -23,12 +23,12 @@ INFLUX_TOKEN = os.getenv("INFLUX_TOKEN")
 INFLUX_ORG = os.getenv("INFLUX_ORG")
 INFLUX_BUCKET = os.getenv("INFLUX_BUCKET")
 
-if not all([INFLUX_URL, INFLUX_TOKEN, INFLUX_ORG, INFLUX_BUCKET]):
-    raise RuntimeError("Missing one or more InfluxDB environment variables: INFLUX_URL, INFLUX_TOKEN, INFLUX_ORG, INFLUX_BUCKET")
-
-# Initialize InfluxDB client
-client = InfluxDBClient(url=INFLUX_URL, token=INFLUX_TOKEN, org=INFLUX_ORG)
-write_api = client.write_api(write_options=SYNCHRONOUS)
+# Only initialize InfluxDB client if all env vars are set
+client = None
+write_api = None
+if all([INFLUX_URL, INFLUX_TOKEN, INFLUX_ORG, INFLUX_BUCKET]):
+    client = InfluxDBClient(url=INFLUX_URL, token=INFLUX_TOKEN, org=INFLUX_ORG)
+    write_api = client.write_api(write_options=SYNCHRONOUS)
 
 # Precompile regex patterns
 VERSION_RE = re.compile(r"Kopia Version:\s*\*\*(?P<version>[0-9\.]+)\*\*")
@@ -51,11 +51,22 @@ DATE_FORMAT = "%a, %d %b %Y %H:%M:%S %z"
 # Helpers
 
 def parse_duration(val):
+    # Handles durations like '4h30m59s', '3m28.8s', '300ms', '2.5s', '5s', etc.
+    import re
+    val = val.strip()
     if val.endswith('ms'):
         return float(val[:-2]) / 1000.0
-    if val.endswith('s'):
+    if val.endswith('s') and val.replace('.', '', 1).replace('s', '').isdigit():
         return float(val[:-1])
-    return float(val)
+    # Parse complex durations like '4h30m59s', '3m28.8s', '1m1s', etc.
+    pattern = re.compile(r"(?:(?P<h>\d+)h)?(?:(?P<m>\d+)m)?(?:(?P<s>[\d\.]+)s)?")
+    match = pattern.fullmatch(val)
+    if match:
+        h = float(match.group('h') or 0)
+        m = float(match.group('m') or 0)
+        s = float(match.group('s') or 0)
+        return h * 3600 + m * 60 + s
+    return 0.0
 
 
 def parse_size(val):
@@ -121,20 +132,8 @@ def webhook():
                 finished_val = None
         duration_val = 0.0
         if duration:
-            # Parse duration like '4h30m59s' or '300ms' or '3m28.8s'
             dur_str = duration.group('duration').strip()
-            try:
-                # Convert to seconds
-                import isodate
-                duration_val = isodate.parse_duration('PT' + dur_str.upper().replace('H', 'H').replace('M', 'M').replace('S', 'S')).total_seconds()
-            except Exception:
-                # fallback: try to parse seconds or ms
-                if dur_str.endswith('ms'):
-                    duration_val = float(dur_str[:-2]) / 1000.0
-                elif dur_str.endswith('s'):
-                    duration_val = float(dur_str[:-1])
-                else:
-                    duration_val = 0.0
+            duration_val = parse_duration(dur_str)
         error_msg = error.group('error').strip() if error else ''
 
         p = Point("kopia_maintenance")
@@ -199,6 +198,15 @@ def webhook():
 
     # Write to InfluxDB
     try:
+        # Lazy init for testability
+        global write_api
+        if write_api is None:
+            from influxdb_client import InfluxDBClient
+            from influxdb_client.client.write_api import SYNCHRONOUS
+            if not all([INFLUX_URL, INFLUX_TOKEN, INFLUX_ORG, INFLUX_BUCKET]):
+                raise RuntimeError("Missing one or more InfluxDB environment variables: INFLUX_URL, INFLUX_TOKEN, INFLUX_ORG, INFLUX_BUCKET")
+            client = InfluxDBClient(url=INFLUX_URL, token=INFLUX_TOKEN, org=INFLUX_ORG)
+            write_api = client.write_api(write_options=SYNCHRONOUS)
         write_api.write(bucket=INFLUX_BUCKET, record=p)
         logger.info("Wrote point to InfluxDB")
     except Exception as e:
